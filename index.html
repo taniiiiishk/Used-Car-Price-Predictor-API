@@ -1,0 +1,156 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Used Car Price Predictor</title>
+<style>
+  :root {
+    --bg:#f3f5f9; --card:#ffffff; --text:#162033; --muted:#64708a; --line:#d8deea;
+    --accent:#0f766e; --accent-hover:#0b5f58; --soft:#e6f4f2; --err-bg:#fee2e2; --err:#b91c1c;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --bg:#0e131d; --card:#171e2c; --text:#e7ecf5; --muted:#93a0b8; --line:#2b3550;
+      --accent:#2dd4bf; --accent-hover:#5eead4; --soft:#12332f; --err-bg:#3b1515; --err:#fca5a5;
+    }
+  }
+  * { box-sizing:border-box; }
+  body { margin:0; background:var(--bg); color:var(--text);
+         font:16px/1.5 system-ui,-apple-system,"Segoe UI",Roboto,sans-serif; }
+  main { max-width:760px; margin:0 auto; padding:40px 16px 64px; }
+  header { margin-bottom:24px; }
+  h1 { font-size:1.75rem; margin:0 0 6px; letter-spacing:-0.01em; }
+  .sub { margin:0; color:var(--muted); }
+  .card { background:var(--card); border:1px solid var(--line); border-radius:16px; padding:24px; }
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:16px 20px; }
+  @media (max-width:600px) { .grid { grid-template-columns:1fr; } }
+  label { display:block; font-size:.82rem; font-weight:600; margin-bottom:6px; color:var(--muted); text-transform:uppercase; letter-spacing:.04em; }
+  select, input { width:100%; padding:11px 12px; font:inherit; color:var(--text); background:var(--bg);
+                  border:1px solid var(--line); border-radius:10px; }
+  select:focus, input:focus { outline:2px solid var(--accent); outline-offset:1px; }
+  button { margin-top:24px; width:100%; padding:14px; font:inherit; font-weight:600; font-size:1rem;
+           color:#fff; background:var(--accent); border:0; border-radius:10px; cursor:pointer; transition:background .15s; }
+  @media (prefers-color-scheme: dark) { button { color:#062925; } }
+  button:hover { background:var(--accent-hover); }
+  button:disabled { opacity:.6; cursor:wait; }
+  #result { display:none; margin-top:20px; border-radius:14px; padding:20px; }
+  #result.ok { background:var(--soft); border:1px solid var(--accent); }
+  #result.err { background:var(--err-bg); color:var(--err); }
+  .label { font-size:.8rem; text-transform:uppercase; letter-spacing:.05em; color:var(--muted); font-weight:600; }
+  .price { font-size:2.4rem; font-weight:700; line-height:1.15; margin:4px 0 2px; }
+  .exact { color:var(--muted); margin:0 0 12px; }
+  .range { margin:0; font-weight:600; }
+  .note { color:var(--muted); font-size:.8rem; margin:20px 0 0; text-align:center; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>🚗 Used Car Price Predictor</h1>
+    <p class="sub">Estimate the resale price of a used car in India, based on CarDekho listings.</p>
+  </header>
+
+  <form class="card" id="form">
+    <div class="grid">
+      <div><label for="brand">Brand</label><select id="brand" required></select></div>
+      <div><label for="model">Model</label><select id="model" required></select></div>
+      <div><label for="year">Manufacturing year</label><input id="year" type="number" required></div>
+      <div><label for="km">Kilometres driven</label><input id="km" type="number" min="0" max="1000000" step="1000" value="50000" required></div>
+      <div><label for="fuel">Fuel</label><select id="fuel"></select></div>
+      <div><label for="transmission">Transmission</label><select id="transmission"></select></div>
+      <div><label for="seller">Seller type</label><select id="seller"></select></div>
+      <div><label for="owner">Owner</label><select id="owner"></select></div>
+    </div>
+    <button type="submit" id="btn">Predict price</button>
+    <div id="result" role="status" aria-live="polite"></div>
+  </form>
+
+  <p class="note">Estimate from a machine-learning model. Actual prices vary with condition, location and demand.</p>
+</main>
+
+<script>
+const $ = (id) => document.getElementById(id);
+const inr = new Intl.NumberFormat("en-IN");
+let options = null;
+
+function fill(select, values, preferred) {
+  select.innerHTML = "";
+  values.forEach(v => select.add(new Option(v, v)));
+  if (preferred && values.includes(preferred)) select.value = preferred;
+}
+
+function showResult(kind, html) {
+  const r = $("result");
+  r.className = kind;
+  r.innerHTML = html;
+  r.style.display = "block";
+}
+
+function lakh(n) {
+  return n >= 100000 ? "₹" + (n / 100000).toFixed(2) + " Lakh" : "₹" + inr.format(n);
+}
+
+async function init() {
+  try {
+    const res = await fetch("/options");
+    options = await res.json();
+    fill($("brand"), options.brands, "Maruti");
+    updateModels();
+    fill($("fuel"), options.fuels, "Petrol");
+    fill($("transmission"), options.transmissions, "Manual");
+    fill($("seller"), options.seller_types, "Individual");
+    fill($("owner"), options.owners, "First Owner");
+    const thisYear = new Date().getFullYear();
+    $("year").min = 1990; $("year").max = thisYear; $("year").value = 2015;
+  } catch (e) {
+    showResult("err", "Could not load the form options. Is the server running?");
+  }
+}
+
+function updateModels() {
+  fill($("model"), options.models_by_brand[$("brand").value] || []);
+}
+$("brand").addEventListener("change", updateModels);
+
+$("form").addEventListener("submit", async (e) => {
+  e.preventDefault();
+  const body = {
+    brand: $("brand").value, model: $("model").value,
+    year: parseInt($("year").value, 10), km_driven: parseInt($("km").value, 10),
+    fuel: $("fuel").value, seller_type: $("seller").value,
+    transmission: $("transmission").value, owner: $("owner").value,
+  };
+  const btn = $("btn");
+  btn.disabled = true; btn.textContent = "Predicting…";
+  try {
+    const res = await fetch("/predict", {
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body),
+    });
+    const out = await res.json();
+    if (!res.ok) {
+      const d = out.detail;
+      throw new Error(typeof d === "string" ? d : "Please check the values you entered.");
+    }
+    const [lo, hi] = out.range_inr;
+    showResult("ok",
+      `<div class="label">Estimated price</div>
+       <div class="price">${lakh(out.predicted_price_inr)}</div>
+       <p class="exact">₹${inr.format(out.predicted_price_inr)}</p>
+       <p class="range">Likely range: ${lakh(lo)} to ${lakh(hi)}</p>`);
+  } catch (err) {
+    showResult("err", "Error: " + String(err.message).replace(/</g, "&lt;"));
+  } finally {
+    btn.disabled = false; btn.textContent = "Predict price";
+  }
+});
+
+init();
+</script>
+</body>
+</html>
+
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
