@@ -66,7 +66,8 @@ Response:
 ```
 
 ## Screenshots
-Add screenshots of the web UI here.
+<img width="765" height="763" alt="Screenshot 2026-11-10 at 3 15 40 PM" src="https://github.com/user-attachments/assets/ad8d0c64-e9de-4ecd-a67d-666e5c60a1fc" />
+
 
 ## Future scope
 - Add engine, power and mileage features
